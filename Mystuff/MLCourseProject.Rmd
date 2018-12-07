@@ -1,0 +1,102 @@
+---
+title: 'Practical ML: Course Project'
+author: "mmcbride"
+date: "21 October 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RCurl)
+library(caret)
+library(tidyverse)
+```
+
+## Executive Summary
+
+
+## Load and Clean Data
+
+### Pull data into R
+
+The training and test data are loaded from two sepeate URLs.
+```{r, cache = TRUE}
+
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+training <- read.csv(textConnection(getURL(trainingURL)))
+
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testing <- read.csv(textConnection(getURL(testURL)))
+```
+
+The dependent variable in question is "classe". 
+
+```{r, include = TRUE}
+print(summary(training$classe))
+```
+
+
+
+
+
+### Clean the data
+Convert all NAs from the training dataset into 0s then remove variables that sum close to 0.
+
+```{r, include=TRUE, echo=TRUE}
+
+clean_training <- training %>% replace(is.na(.), 0)
+almostZero <- nearZeroVar(clean_training,saveMetrics=TRUE)
+clean_training <- clean_training[,almostZero$nzv==FALSE]
+```
+
+Remove timestamps, user_name and other beginning variables that don't supply usable info.
+
+```{r, include=TRUE, echo=FALSE}
+clean_training <- clean_training[,-c(1:7)]
+```
+
+### Create a Validation Set
+
+```{r, include=TRUE, echo = TRUE, cache = TRUE}
+set.seed(1234)
+incTrain<- createDataPartition(clean_training$classe, p=0.8, list=FALSE)
+training.data<- clean_training[incTrain, ]
+validation <- clean_training[-incTrain, ]
+dim(training.data) ; dim(validation)
+```
+
+
+
+## Trying Different models
+
+
+### Random Forest
+
+Keeping it simple to start, trying a random forest model.
+```{r models, echo=FALSE}
+rfModel <- train(classe ~ . , method = "rf", data=training.data)
+
+predRfTrain <- predict(rfModel, training.data)
+
+confusionMatrix(predRfTrain, training.data$classe)
+
+```
+
+### Bagging
+
+```{r models, echo=FALSE}
+bagModel <- train(classe ~ . , method = "treebag", data=training.data)
+
+predBadTrain <- predict(bagModel, training.data)
+
+confusionMatrix(predBadTrain, training.data$classe)
+
+```
+
+### PreProcessing
+
+```{r, include=TRUE, echo=TRUE, cache = TRUE}
+preObj <- preProcess(select(training.data,-classe),method=c("center","scale"))
+predict(preObj, select(training.data,-classe))
+```
+

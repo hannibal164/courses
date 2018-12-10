@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(RCurl)
 library(caret)
 library(tidyverse)
+library(rpart.plot)
 ```
 
 ## Executive Summary
@@ -47,6 +48,10 @@ Convert all NAs from the training dataset into 0s then remove variables that sum
 clean_training <- training %>% replace(is.na(.), 0)
 almostZero <- nearZeroVar(clean_training,saveMetrics=TRUE)
 clean_training <- clean_training[,almostZero$nzv==FALSE]
+
+clean_test <- testing %>% replace(is.na(.), 0)
+almostZero <- nearZeroVar(clean_test,saveMetrics=TRUE)
+clean_test <- clean_test[,almostZero$nzv==FALSE]
 ```
 
 Remove timestamps, user_name and other beginning variables that don't supply usable info.
@@ -62,41 +67,80 @@ set.seed(1234)
 incTrain<- createDataPartition(clean_training$classe, p=0.8, list=FALSE)
 training.data<- clean_training[incTrain, ]
 validation <- clean_training[-incTrain, ]
+
 dim(training.data) ; dim(validation)
-```
-
-
-
-## Trying Different models
-
-
-### Random Forest
-
-Keeping it simple to start, trying a random forest model.
-```{r models, echo=FALSE}
-rfModel <- train(classe ~ . , method = "rf", data=training.data)
-
-predRfTrain <- predict(rfModel, training.data)
-
-confusionMatrix(predRfTrain, training.data$classe)
-
-```
-
-### Bagging
-
-```{r models, echo=FALSE}
-bagModel <- train(classe ~ . , method = "treebag", data=training.data)
-
-predBadTrain <- predict(bagModel, training.data)
-
-confusionMatrix(predBadTrain, training.data$classe)
-
 ```
 
 ### PreProcessing
 
 ```{r, include=TRUE, echo=TRUE, cache = TRUE}
 preObj <- preProcess(select(training.data,-classe),method=c("center","scale"))
-predict(preObj, select(training.data,-classe))
+pre_trainingData <- predict(preObj, training.data)
+
+pre_validationData <- predict(preObj, validation)
+pre_testing_data <- predict(preObj, clean_test)
 ```
+
+## Trying Different models
+
+### Bagging
+
+```{r, cache=TRUE, echo=TRUE, include=TRUE}
+bagModel <- train(classe ~ . , method = "treebag", data=training.data)
+
+predBadTrain <- predict(bagModel, training.data)
+
+confusionMatrix(predBadTrain, training.data$classe)$overall[1]
+
+```
+
+### Rpart
+
+```{r ,cache=TRUE, include=TRUE, echo=TRUE}
+rpartModel <- train(classe ~ . , method = "rpart", data=training.data)
+
+predRpartTrain <- predict(rpartModel, training.data)
+
+confusionMatrix(predRpartTrain, training.data$classe)$overall[1]
+
+
+```
+
+
+```{r echo=TRUE, include=TRUE}
+rpart.plot(rpartModel$finalModel)
+```
+
+
+
+### Random Forest
+
+Using a cross-validation Random Forest model with 5 folds. This should avoid overfitting the data.
+```{r, echo=TRUE,include=TRUE, cache=TRUE}
+rfModel <- train(classe ~ . , method = "rf", data=pre_trainingData,  trControl=trainControl(method='cv'), number=5, allowParallel=TRUE, importance=TRUE )
+
+predRfTrain <- predict(rfModel, pre_trainingData)
+
+confusionMatrix(predRfTrain, training.data$classe)$overall[1]
+
+```
+
+### Choosing the Model
+
+Lookng at the results from the 3 models, the Random Forest appears to deliver the best results, though perfect accuracy suggests there may be overfitting. The validation dataset will now be used to test accuracy of the model.
+
+## Predicting Validation Classe
+
+The rfModel used earlier will be used to predict the validation classe. The accuracy will then be tested
+
+```{r validate , echo=TRUE,include=TRUE,cache=TRUE}
+predValidation <- predict(rfModel, pre_validationData)
+confusionMatrix(predValidation, pre_validationData$classe)$overall[1]
+```
+
+## Conclusion
+
+The Random Forest model appears to provide high accuaracy across the validation set. This will be the model used to predict the test classe.
+
+
 

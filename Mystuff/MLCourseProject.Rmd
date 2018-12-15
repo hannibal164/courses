@@ -1,3 +1,168 @@
+<<<<<<< HEAD
+---
+title: 'Practical ML: Course Project'
+author: "mmcbride"
+date: "21 October 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RCurl)
+library(caret)
+library(tidyverse)
+library(rpart.plot)
+```
+
+## Executive Summary
+
+
+## Load and Clean Data
+
+### Pull data into R
+
+The training and test data are loaded from two sepeate URLs.
+```{r, cache = TRUE}
+
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+training <- read.csv(textConnection(getURL(trainingURL)))
+
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testing <- read.csv(textConnection(getURL(testURL)))
+```
+
+The dependent variable in question is "classe". 
+
+```{r, include = TRUE}
+print(summary(training$classe))
+```
+
+
+
+
+
+### Clean the data
+Convert all NAs from the training dataset into 0s then remove variables that sum close to 0.
+
+```{r, include=TRUE, echo=TRUE}
+
+clean_training <- training %>% replace(is.na(.), 0)
+almostZero <- nearZeroVar(clean_training,saveMetrics=TRUE)
+clean_training <- clean_training[,almostZero$nzv==FALSE]
+
+clean_test <- testing %>% replace(is.na(.), 0)
+almostZero <- nearZeroVar(clean_test,saveMetrics=TRUE)
+clean_test <- clean_test[,almostZero$nzv==FALSE]
+```
+
+Remove timestamps, user_name and other beginning variables that don't supply usable info.
+
+```{r, include=TRUE, echo=FALSE}
+clean_training <- clean_training[,-c(1:7)]
+```
+
+### Create a Validation Set
+
+The data provided is already split into training and test, but to help optimization 80% of the data will be used to train the model, and 20% used to cross validate with a validation data set.
+
+```{r, include=TRUE, echo = TRUE, cache = TRUE}
+set.seed(1234)
+incTrain<- createDataPartition(clean_training$classe, p=0.8, list=FALSE)
+training.data<- clean_training[incTrain, ]
+validation <- clean_training[-incTrain, ]
+
+dim(training.data) ; dim(validation)
+```
+
+### PreProcessing
+
+We'll pre-process the data to improve the performance the models by standardising the variables. Scale will divide values by their standard deviation, while center will subtract the mean from each value.
+
+```{r preprocess, include=TRUE, echo=TRUE, cache = TRUE}
+preObj <- preProcess(select(training.data,-classe),method=c("center","scale"))
+pre_trainingData <- predict(preObj, training.data)
+
+pre_validationData <- predict(preObj, validation)
+pre_testing_data <- predict(preObj, clean_test)
+```
+
+## Trying Different models
+
+### Bagging
+
+```{r bag, cache=TRUE, echo=TRUE, include=TRUE}
+bagModel <- train(classe ~ . , method = "treebag", data=training.data)
+
+predBadTrain <- predict(bagModel, training.data)
+
+confusionMatrix(predBadTrain, training.data$classe)$overall[1]
+
+
+```
+
+### Rpart
+
+```{r rpart ,cache=TRUE, include=TRUE, echo=TRUE}
+rpartModel <- train(classe ~ . , method = "rpart", data=training.data)
+
+predRpartTrain <- predict(rpartModel, training.data)
+
+confusionMatrix(predRpartTrain, training.data$classe)$overall[1]
+
+
+```
+
+
+```{r rpartplot ,echo=TRUE, include=TRUE}
+rpart.plot(rpartModel$finalModel)
+```
+
+
+
+### Random Forest
+
+Using a cross-validation Random Forest model with 5 folds. This should avoid overfitting the data.
+```{r rf, echo=TRUE,include=TRUE, cache=TRUE}
+rfModel <- train(classe ~ . , method = "rf", data=pre_trainingData,  trControl=trainControl(method='cv'), number=5, allowParallel=TRUE, importance=TRUE )
+
+predRfTrain <- predict(rfModel, pre_trainingData)
+
+confusionMatrix(predRfTrain, training.data$classe)$overall[1]
+
+```
+
+### Choosing the Model
+
+Lookng at the results from the 3 models, the Random Forest appears to deliver the best results, though perfect accuracy suggests there may be overfitting. The model will now be cross-validated to test accuracy of the model.
+
+## Cross-Validation of Classe
+
+The rfModel used earlier will be cross-validated by predicting the validation classe. The accuracy and out of sample error will then be checked to ensure good model fit.
+
+```{r validate , echo=TRUE,include=TRUE,cache=TRUE}
+predValidation <- predict(rfModel, pre_validationData)
+confusionMatrix(predValidation, pre_validationData$classe)$overall[1]
+```
+Accuracy of the model remains high, and so out of sample error is low:
+
+```{r cross-validate , echo=TRUE,include=TRUE,cache=TRUE}
+outOfSampleError <- 1 - confusionMatrix(predValidation, pre_validationData$classe)$overall[1]
+print(outOfSampleError)
+```
+
+
+
+
+## Conclusion
+
+The Random Forest model appears to provide high accuaracy across the validation set. This will be the model used to predict the test classe.
+
+
+## Predict Test Classe
+```{r conclusion, include=TRUE, echo=TRUE}
+print(data.frame(preds = predict(rfModel, pre_testing_data), index=c(1:20)))
+```
+=======
 ---
 title: 'Practical ML: Course Project'
 author: "mmcbride"
@@ -144,3 +309,4 @@ The Random Forest model appears to provide high accuaracy across the validation 
 
 
 
+>>>>>>> f397180696a971e0f2e9f2cd6439fffdb5aec6c1
